@@ -2,7 +2,7 @@ const std = @import("std");
 
 const DeviceError = error{ NoKeyboardFound, AccessDenied };
 
-pub fn detect_keyboard (allocator: std.mem.Allocator) ![]u8 {
+pub fn detect_keyboard (buffer: []u8) ![]const u8 {
     const search_dir = "/dev/input/by-id"; 
     var dir = try std.fs.openDirAbsolute(search_dir, .{ .iterate = true });
     defer dir.close();
@@ -11,7 +11,7 @@ pub fn detect_keyboard (allocator: std.mem.Allocator) ![]u8 {
 
     while(try iterator.next()) |entry| {
         if(std.mem.endsWith(u8, entry.name, "-event-kbd")) {
-            return try std.fs.path.join(allocator, &[_][]const u8{ search_dir, entry.name });
+            return try std.fmt.bufPrint(buffer, "{s}/{s}", .{ search_dir, entry.name });
         }
     }
 

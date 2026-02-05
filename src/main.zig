@@ -23,8 +23,9 @@ pub fn main() !void {
 }
 
 fn run(allocator: std.mem.Allocator) !void {
-
-    const device_path = try device.detect_keyboard(allocator);
+    _ = allocator;
+    var path_buffer: [1024]u8 = undefined;
+    const device_path = try device.detect_keyboard(&path_buffer);
     var file = try std.fs.cwd().openFile(device_path, .{ .mode = .read_only });
     defer file.close();
 

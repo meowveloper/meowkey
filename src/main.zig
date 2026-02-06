@@ -15,28 +15,29 @@ const TimeVal = extern struct {
 };
 
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-    try run(allocator);
+pub fn main(init: std.process.Init) !void {
+    const gpa: std.mem.Allocator = init.gpa;
+    const arena: std.mem.Allocator = init.arena.allocator();
+
+    const io: std.Io = init.io;
+
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_file_writer: std.Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
+    const stdout_writer = &stdout_file_writer.interface;
+
+    const args = try init.minimal.args.toSlice(arena);
+    for (args) |arg| {
+        std.log.info("arg: {s}", .{arg});
+    }
+
+    try run(gpa, io, stdout_writer);
 }
 
-fn run(allocator: std.mem.Allocator) !void {
+fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     _ = allocator;
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const device_path = try device.detect_keyboard(&path_buffer);
-    var file = try std.fs.cwd().openFile(device_path, .{ .mode = .read_only });
-    defer file.close();
+    const device_path = try device.detect_keyboard(io, &path_buffer);
 
-    try utils.print("listening on {s}...\n", .{device_path});
-
-    while (true) {
-        var event: InputEvent = undefined;
-        const bytes_read = try file.read(std.mem.asBytes(&event));
-        if(bytes_read == 0) break;
-
-        if(event.type == 1 and event.value == 1) try utils.print("key pressed! code: {d}\n", .{event.code});
-    }
+    try utils.print(writer, "file path: {s}\n", .{device_path});
 }
 

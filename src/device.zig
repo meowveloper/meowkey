@@ -2,18 +2,18 @@ const std = @import("std");
 
 const DeviceError = error{ NoKeyboardFound, AccessDenied };
 
-pub fn detect_keyboard (buffer: []u8) ![]const u8 {
-    var file = try std.fs.openFileAbsolute("/proc/bus/input/devices", .{ .mode = .read_only });
-    defer file.close();
+pub fn detect_keyboard (io: std.Io, buffer: []u8) ![]const u8 {
+    var file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
+    defer file.close(io);
 
     var file_buffer: [1024]u8 = undefined;
-    var reader = file.reader(&file_buffer);
+    var reader = file.reader(io, &file_buffer);
     
     var event_id_buff: [1024]u8 = undefined;
     var current_event_id: ?[]const u8 = null;
 
     while(try reader.interface.takeDelimiter('\n')) |raw_line| {
-        const line = std.mem.trimRight(u8, raw_line, &std.ascii.whitespace);
+        const line = std.mem.trimEnd(u8, raw_line, &std.ascii.whitespace);
         if(line.len == 0) {
             current_event_id = null;
             continue;
@@ -43,6 +43,7 @@ pub fn detect_keyboard (buffer: []u8) ![]const u8 {
 
 test "detect_keyboard" {
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const result = try detect_keyboard(&buffer);
+    const io = std.testing.io;
+    const result = try detect_keyboard(io, &buffer);
     std.debug.print("result: {s}\n", .{result});
 }

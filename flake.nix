@@ -8,7 +8,7 @@
         let
             system = "x86_64-linux"; 
             pkgs = nixpkgs.legacyPackages.${system};
-            zig = zig-overlay.packages.${system}."0.15.2";
+            zig = zig-overlay.packages.${system}.master;
         in {
             devShells.${system}.default = pkgs.mkShell {
                 nativeBuildInputs = [

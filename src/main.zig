@@ -34,10 +34,20 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
-    _ = allocator;
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const device_path = try device.detect_keyboard(io, &path_buffer);
+    var paths: std.ArrayList([]u8) = .empty;
+    defer {
+        for(paths.items) |item| {
+            allocator.free(item);
+        }
+        paths.deinit(allocator);
+    }
 
-    try utils.print(writer, "file path: {s}\n", .{device_path});
+    var devices_file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
+    defer devices_file.close(io);
+
+    try device.detect_keyboard(allocator, io,devices_file, &paths);
+    for(paths.items) |path| {
+        try utils.print(writer, "path: {s}\n", .{path});
+    }
 }
 

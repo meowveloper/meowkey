@@ -34,20 +34,34 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
-    var paths: std.ArrayList([]u8) = .empty;
-    defer {
-        for(paths.items) |item| {
-            allocator.free(item);
-        }
-        paths.deinit(allocator);
-    }
-
+    _ = allocator;
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     var devices_file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
     defer devices_file.close(io);
 
-    try device.detect_keyboard(allocator, io,devices_file, &paths);
-    for(paths.items) |path| {
-        try utils.print(writer, "path: {s}\n", .{path});
+    const path = try device.detect_keyboard(io, devices_file, &path_buffer);
+
+    try utils.print(writer, "opening device {s}\n", .{path});
+    const fd = try std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0);
+    defer std.posix.close(fd);
+
+    try utils.print(writer, "listening for events..(Ctrl + C to stop)\n", .{});
+
+    while (true) {
+        var ev: InputEvent = undefined;
+        const bytes_read = try std.posix.read(fd, std.mem.asBytes(&ev));
+
+        if(bytes_read == @sizeOf(InputEvent)) {
+            if(ev.type == 1) {
+                const state = switch (ev.value) {
+                    0 => "UP",
+                    1 => "DOWN",
+                    2 => "REPEAT",
+                    else => "UNKNOWN"
+                };
+                try utils.print(writer, "key code: {}, state: {s}\n", .{ev.code, state});
+            }
+        }
     }
 }
 

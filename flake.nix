@@ -14,10 +14,15 @@
                 nativeBuildInputs = [
                     zig
                     pkgs.zls
+                    pkgs.pkg-config
+                ];
+
+                buildInputs = [
+                    pkgs.alsa-lib
                 ];
 
                 shellHook = ''
-                    echo "Welcome to the Zig 0.15.2 Dev Shell!"
+                    echo "Welcome to meowkey Dev Shell!"
                 '';
             };
         };

@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 const device = @import("device.zig");
+const audio = @import("audio.zig");
 
 const InputEvent = extern struct {
     time: TimeVal,
@@ -45,8 +46,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     const fd = try std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0);
     defer std.posix.close(fd);
 
-    try utils.print(writer, "listening for events..(Ctrl + C to stop)\n", .{});
 
+    const player = try audio.Player.init("default");
+    try utils.print(writer, "listening for events..(Ctrl + C to stop)\n", .{});
+    _ = player;
     while (true) {
         var ev: InputEvent = undefined;
         const bytes_read = try std.posix.read(fd, std.mem.asBytes(&ev));

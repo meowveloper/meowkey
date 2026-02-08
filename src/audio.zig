@@ -37,6 +37,13 @@ pub const Player = struct {
         }
     }
 
+    pub fn play(self: *Player, samples: []const i16) !void {
+        if(self.handle) |h| {
+            const frames = alsa.snd_pcm_writei(h, samples.ptr, samples.len);
+            if(frames < 0) _ = alsa.snd_pcm_prepare(h);
+        }
+    }
+
     fn setup_params (handle: ?*alsa.snd_pcm_t, sample_rate: c_uint) !void {
         var params: ?*alsa.snd_pcm_hw_params_t = null;
 
@@ -68,3 +75,20 @@ pub const Player = struct {
         }
     }
 };
+
+pub fn generate_sine_wave (allocator: std.mem.Allocator, frequency: f32, duration_ms: usize) ![]i16 {
+    const sample_rate = 44100;
+    const num_samples = (sample_rate * duration_ms) / 1000;
+
+    const buffer = try allocator.alloc(i16, num_samples);
+
+    for(buffer, 0..) |*sample, i| {
+        const time = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(sample_rate));
+        const value = 10000.0 * std.math.sin(2.0 * std.math.pi * frequency * time);
+        sample.* = @as(i16, @intFromFloat(value));
+    }
+
+    return buffer;
+}
+
+

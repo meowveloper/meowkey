@@ -15,6 +15,7 @@
                     zig
                     pkgs.zls
                     pkgs.pkg-config
+                    pkgs.ffmpeg
                 ];
 
                 buildInputs = [

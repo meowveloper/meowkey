@@ -86,26 +86,42 @@ pub fn generate_sine_wave(allocator: std.mem.Allocator, frequency: f32, duration
     return buffer;
 }
 
-const WavHeader = extern struct {
-    // RIFF Header
-    chunk_id: [4]u8, // "RIFF"
-    chunk_size: u32,
-    format: [4]u8, // "WAVE"
 
-    // fmt Sub-chunk
-    fmt_id: [4]u8, // "fmt "
-    fmt_size: u32,
-    audio_format: u16, // 1 for PCM
-    num_channels: u16, // 1 for Mono, 2 for Stereo
-    sample_rate: u32,
-    byte_rate: u32,
-    block_align: u16,
-    bits_per_sample: u16,
-
-    // data Sub-chunk
-    data_id: [4]u8, // "data"
-    data_size: u32,
+pub const KeyEntry = extern struct {
+    code: u16,
+    padding: [2]u8 = .{ 0, 0 },
+    start: u32,
+    end: u32,
+    padding2: [4]u8 = .{ 0, 0, 0, 0 },
 };
+
+pub const Config = struct {
+    entries: []const KeyEntry,
+    file_contents: []const u8,
+
+    pub fn load(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !Config {
+        const contents = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, std.Io.Limit.unlimited);
+        errdefer gpa.free(contents);
+
+        const entries = std.mem.bytesAsSlice(KeyEntry, @as([]align(@alignOf(KeyEntry)) u8, @alignCast(contents)));
+        return .{
+            .entries = entries,
+            .file_contents = contents
+        };
+    }
+    pub fn deinit(self: *Config, gpa: std.mem.Allocator) void {
+        gpa.free(self.file_contents);
+    }
+    pub fn get_entry (self: *Config, code: u16) ?KeyEntry {
+        for (self.entries) |ent| {
+            if(ent.code == code) return ent;
+        }
+        return null;
+    }
+};
+
+
+
 
 const WavData = struct {
     data: []i16,
@@ -116,37 +132,76 @@ const WavData = struct {
     }
 };
 pub fn load_wav(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !WavData {
-    // const max_file_size = 50 * 1024 * 1024; // 50 MB
-
     const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, std.Io.Limit.unlimited);
     errdefer gpa.free(file_contents);
 
-    if (file_contents.len < @sizeOf(WavHeader)) return AudioError.InvalidHeader;
+    if (file_contents.len < 12) return AudioError.InvalidHeader;
 
-    const header = std.mem.bytesAsValue(WavHeader, file_contents[0..@sizeOf(WavHeader)]);
 
-    if (!std.mem.eql(u8, &header.chunk_id, "RIFF")) return AudioError.NotARiffFile;
-    if (!std.mem.eql(u8, &header.format, "WAVE")) return AudioError.NotAWaveFile;
-    if (header.audio_format != 1) return AudioError.UnsupportedCompression;
-    if (header.bits_per_sample != 16) return AudioError.Only16BitSupported;
+    if (!std.mem.eql(u8, file_contents[0..4], "RIFF")) return AudioError.NotARiffFile;
+    if (!std.mem.eql(u8, file_contents[8..12], "WAVE")) return AudioError.NotAWaveFile;
 
-    const data_bytes = file_contents[@sizeOf(WavHeader)..];
-    if (data_bytes.len < header.data_size) return AudioError.IncompleteData;
+    var offset: usize = 12;
+    var fmt_found = false;
+    var data_found = false;
+    var samples: []i16 = &[_]i16{};
 
-    const samples_count = header.data_size / 2;
+    while(offset + 8 <= file_contents.len) {
 
-    const samples_ptr: [*]i16 = @ptrCast(@alignCast(data_bytes.ptr));
+        const chunk_id = file_contents[offset .. offset + 4];
+        const chunk_size = std.mem.readInt(u32, file_contents[offset + 4 ..][0..4], .little);
+        offset += 8;
+
+        if(std.mem.eql(u8, chunk_id, "fmt ")) {
+            const audio_format = std.mem.readInt(u16, file_contents[offset ..][0..2], .little);
+            const bits_per_sample = std.mem.readInt(u16, file_contents[offset + 14 ..][0..2], .little);
+
+            if(audio_format != 1) return AudioError.UnsupportedCompression;
+            if(bits_per_sample != 16) return AudioError.Only16BitSupported;
+            fmt_found = true;
+        } else if(std.mem.eql(u8, chunk_id, "data")) {
+            const samples_count = chunk_size / 2;
+            const samples_ptr: [*]i16 = @ptrCast(@alignCast(file_contents[offset..].ptr));
+            samples = samples_ptr[0..samples_count];
+            data_found = true;
+        }
+
+        offset += chunk_size;
+        if(offset % 2 != 0) offset += 1;
+    }
+
+    if(!fmt_found or !data_found) return AudioError.IncompleteData;
+
     return .{
-        .data = samples_ptr[0..samples_count],
+        .data = samples,
         .file_contents = file_contents,
     };
 }
 
-test "load_wav" {
+test "audio system" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const path = "assets/click.wav";
-    var wav_data = try load_wav(gpa, io, path);
+
+    // Test WAV loading
+    const wav_path = "assets/sound.wav";
+    var wav_data = try load_wav(gpa, io, wav_path);
     defer wav_data.free(gpa);
-    std.debug.print("data: {any}", .{wav_data.data});
+    try std.testing.expect(wav_data.data.len > 0);
+    std.debug.print("WAV data length: {d} samples\n", .{wav_data.data.len});
+
+    // Test Config loading
+    const config_path = "assets/config.bin";
+    var config = try Config.load(gpa, io, config_path);
+    defer config.deinit(gpa);
+    try std.testing.expect(config.entries.len > 0);
+    std.debug.print("Mapped {} keys from config.bin\n", .{config.entries.len});
+
+    // Test specific key lookup (KeyA = 30)
+    if (config.get_entry(30)) |entry| {
+        try std.testing.expect(entry.code == 30);
+        try std.testing.expect(entry.end > entry.start);
+        std.debug.print("KeyA (30) range: {} to {}\n", .{ entry.start, entry.end });
+    } else {
+        return error.TestFailed;
+    }
 }

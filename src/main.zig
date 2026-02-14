@@ -62,8 +62,10 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
         if(bytes_read == @sizeOf(InputEvent)) {
             if(ev.type == 1 and ev.value == 1) {
                 if(config.get_entry(ev.code)) |entry| {
-                    const sound_slice = wav.data[entry.start..entry.end];
-                    try player.play(sound_slice);
+                    if (entry.end <= wav.data.len and entry.start < entry.end) {
+                        const sound_slice = wav.data[entry.start..entry.end];
+                        try player.play(sound_slice);
+                    }
                 }
                 try utils.print(writer, "key code: {}\n", .{ev.code});
             }

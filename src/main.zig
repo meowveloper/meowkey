@@ -34,7 +34,7 @@ pub fn main(init: std.process.Init) !void {
     try run(gpa, io, stdout_writer);
 }
 
-fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
+fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     var devices_file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
     defer devices_file.close(io);
@@ -45,8 +45,12 @@ fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     const fd = try std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0);
     defer std.posix.close(fd);
 
-    const beep = try audio.generate_sine_wave(allocator, 440.0, 100);
-    defer allocator.free(beep);
+    var config = try audio.Config.load(gpa, io, "assets/config.bin");
+    defer config.deinit(gpa);
+
+    var wav = try audio.load_wav(gpa, io, "assets/sound.wav");
+    defer wav.free(gpa);
+
 
     var player = try audio.Player.init("default");
     try utils.print(writer, "listening for events..(Ctrl + C to stop)\n", .{});
@@ -56,15 +60,12 @@ fn run(allocator: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
         const bytes_read = try std.posix.read(fd, std.mem.asBytes(&ev));
 
         if(bytes_read == @sizeOf(InputEvent)) {
-            if(ev.type == 1) {
-                try player.play(beep);
-                const state = switch (ev.value) {
-                    0 => "UP",
-                    1 => "DOWN",
-                    2 => "REPEAT",
-                    else => "UNKNOWN"
-                };
-                try utils.print(writer, "key code: {}, state: {s}\n", .{ev.code, state});
+            if(ev.type == 1 and ev.value == 1) {
+                if(config.get_entry(ev.code)) |entry| {
+                    const sound_slice = wav.data[entry.start..entry.end];
+                    try player.play(sound_slice);
+                }
+                try utils.print(writer, "key code: {}\n", .{ev.code});
             }
         }
     }

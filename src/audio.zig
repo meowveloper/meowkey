@@ -71,21 +71,6 @@ pub const Player = struct {
     }
 };
 
-pub fn generate_sine_wave(allocator: std.mem.Allocator, frequency: f32, duration_ms: usize) ![]i16 {
-    const sample_rate = 44100;
-    const num_samples = (sample_rate * duration_ms) / 1000;
-
-    const buffer = try allocator.alloc(i16, num_samples);
-
-    for (buffer, 0..) |*sample, i| {
-        const time = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(sample_rate));
-        const value = 10000.0 * std.math.sin(2.0 * std.math.pi * frequency * time);
-        sample.* = @as(i16, @intFromFloat(value));
-    }
-
-    return buffer;
-}
-
 
 pub const KeyEntry = extern struct {
     code: u16,

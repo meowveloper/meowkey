@@ -2,7 +2,14 @@ const std = @import("std");
 
 const DeviceError = error{ NoKeyboardFound, AccessDenied };
 
-pub fn detect_keyboard (io: std.Io, file: std.Io.File, path_buffer: []u8) ![]u8 {
+pub fn detect_keyboard (gpa: std.mem.Allocator, io: std.Io, file: std.Io.File) !std.ArrayList([]u8) {
+    var paths: std.ArrayList([]u8) = .empty;
+    errdefer {
+        for (paths.items) |item| {
+            gpa.free(item);
+        } 
+        paths.deinit(gpa);
+    }
     var file_buffer: [1024]u8 = undefined;
     var reader = file.reader(io, &file_buffer);
     
@@ -29,20 +36,26 @@ pub fn detect_keyboard (io: std.Io, file: std.Io.File, path_buffer: []u8) ![]u8 
             const ev_bits = std.fmt.parseInt(u64, ev_hex_str, 16) catch 0;
             if((ev_bits & 0x100000) != 0) {
                 if(current_event_id) |event_id| {
-                    return try std.fmt.bufPrint(path_buffer, "/dev/input/{s}", .{event_id});
+                    try paths.append(gpa, try std.fmt.allocPrint(gpa, "/dev/input/{s}", .{event_id}));
                 }
             }
         }
     }
-    return DeviceError.NoKeyboardFound;
+    if(paths.items.len < 1) return DeviceError.NoKeyboardFound;
+    return paths;
 }
 
 test "detect_keyboard" {
+    const gpa = std.testing.allocator;
     const io = std.testing.io;
-    
     var devices_file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
     defer devices_file.close(io);
-    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const path = try detect_keyboard(io, devices_file, &path_buffer);
-    std.debug.print("path: {s}\n", .{path});
+    var paths = try detect_keyboard(gpa, io, devices_file);
+    defer {
+        for(paths.items) |item| gpa.free(item);
+        paths.deinit(gpa);
+    }
+    for(paths.items) |path| std.debug.print("path: {s}\n", .{path});
 }
+
+

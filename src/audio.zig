@@ -107,7 +107,7 @@ pub const Config = struct {
 
 
 
-const WavData = struct {
+pub const WavData = struct {
     data: []i16,
     file_contents: []u8,
 

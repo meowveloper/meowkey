@@ -35,15 +35,16 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
-    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    try utils.print(writer, "starting meowkey\n", .{});
     var devices_file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
     defer devices_file.close(io);
 
-    const path = try device.detect_keyboard(io, devices_file, &path_buffer);
+    var paths = try device.detect_keyboard(gpa, io, devices_file);
+    defer {
+        for (paths.items) |it| gpa.free(it);
+        paths.deinit(gpa);
+    }
 
-    try utils.print(writer, "opening device {s}\n", .{path});
-    const fd = try std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0);
-    defer std.posix.close(fd);
 
     var config = try audio.Config.load(gpa, io, "assets/config.bin");
     defer config.deinit(gpa);
@@ -51,16 +52,37 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     var wav = try audio.load_wav(gpa, io, "assets/sound.wav");
     defer wav.free(gpa);
 
+    for (paths.items) |path| {
+        const t = try std.Thread.spawn(.{}, read_thread, .{ path, &config, &wav });
+        t.detach();
+    }
+    try io.sleep(.fromSeconds(std.math.maxInt(i64)), .awake);
+}
+
+fn play_thread(data: []const i16, device_name: [:0]const u8) void {
+    var player = audio.Player.init(device_name) catch return;
+    defer player.deinit();
+    player.play(data) catch {
+        std.log.err("failed to play sound", .{});
+    };
+}
+
+fn read_thread(path: []const u8, config: *audio.Config, wav: *audio.WavData) void {
+    const fd = std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0) catch |err| {
+        std.log.err("failed to open device {s}: {}\n", .{path, err});
+        return;
+    };
+    defer std.posix.close(fd);
     while (true) {
         var ev: InputEvent = undefined;
-        const bytes_read = try std.posix.read(fd, std.mem.asBytes(&ev));
+        const bytes_read = std.posix.read(fd, std.mem.asBytes(&ev)) catch return;
 
         if(bytes_read == @sizeOf(InputEvent)) {
             if(ev.type == 1 and ev.value == 1) {
                 if(config.get_entry(ev.code)) |entry| {
                     if (entry.end <= wav.data.len and entry.start < entry.end) {
                         const sound_slice = wav.data[entry.start..entry.end];
-                        const t = try std.Thread.spawn(.{}, playThread, .{sound_slice, "default"});
+                        const t = std.Thread.spawn(.{}, play_thread, .{sound_slice, "default"}) catch return;
                         t.detach(); 
                     }
                 }
@@ -69,10 +91,8 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     }
 }
 
-fn playThread(data: []const i16, device_name: [:0]const u8) void {
-    var player = audio.Player.init(device_name) catch return;
-    defer player.deinit();
-    player.play(data) catch {
-        std.log.err("failed to play sound", .{});
+fn hot_plug_thread (gpa: std.mem.Allocator, config: *audio.Config, wav: *audio.WavData) void {
+    const inotify_fd = std.os.linux.inotify_init1(0) catch |err| {
+        std.log.err("inotify_init1 failed: {}", .{err});
     };
 }

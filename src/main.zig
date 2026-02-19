@@ -51,10 +51,6 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     var wav = try audio.load_wav(gpa, io, "assets/sound.wav");
     defer wav.free(gpa);
 
-
-    var player = try audio.Player.init("default");
-    try utils.print(writer, "listening for events..(Ctrl + C to stop)\n", .{});
-
     while (true) {
         var ev: InputEvent = undefined;
         const bytes_read = try std.posix.read(fd, std.mem.asBytes(&ev));
@@ -64,7 +60,8 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
                 if(config.get_entry(ev.code)) |entry| {
                     if (entry.end <= wav.data.len and entry.start < entry.end) {
                         const sound_slice = wav.data[entry.start..entry.end];
-                        try player.play(sound_slice);
+                        const t = try std.Thread.spawn(.{}, playThread, .{sound_slice, "default"});
+                        t.detach(); 
                     }
                 }
                 try utils.print(writer, "key code: {}\n", .{ev.code});
@@ -73,3 +70,10 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
     }
 }
 
+fn playThread(data: []const i16, device_name: [:0]const u8) void {
+    var player = audio.Player.init(device_name) catch return;
+    defer player.deinit();
+    player.play(data) catch {
+        std.log.err("failed to play sound", .{});
+    };
+}

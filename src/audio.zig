@@ -36,6 +36,7 @@ pub const Player = struct {
         if (self.handle) |h| {
             const frames = alsa.snd_pcm_writei(h, samples.ptr, samples.len);
             if (frames < 0) _ = alsa.snd_pcm_prepare(h);
+             _ = alsa.snd_pcm_drain(h);
         }
     }
 

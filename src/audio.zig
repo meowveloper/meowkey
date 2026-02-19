@@ -19,8 +19,6 @@ pub const Player = struct {
             return AudioError.OpenFailed;
         }
 
-        std.log.info("ALSA: device '{s}' opened successfully\n", .{device_name});
-
         try setup_params(handle, 44100);
         return Player{ .handle = handle };
     }

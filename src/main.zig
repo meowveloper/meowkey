@@ -64,7 +64,6 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer) !void {
                         t.detach(); 
                     }
                 }
-                try utils.print(writer, "key code: {}\n", .{ev.code});
             }
         }
     }

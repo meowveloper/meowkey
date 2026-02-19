@@ -90,9 +90,3 @@ fn read_thread(path: []const u8, config: *audio.Config, wav: *audio.WavData) voi
         }
     }
 }
-
-fn hot_plug_thread (gpa: std.mem.Allocator, config: *audio.Config, wav: *audio.WavData) void {
-    const inotify_fd = std.os.linux.inotify_init1(0) catch |err| {
-        std.log.err("inotify_init1 failed: {}", .{err});
-    };
-}

@@ -2,8 +2,8 @@ const std = @import("std");
 const alsa = @cImport({
     @cInclude("alsa/asoundlib.h");
 });
-
-pub const AudioError = error{ OpenFailed, ParamSetupFailed, InvalidHeader, NotARiffFile, NotAWaveFile, UnsupportedCompression, Only16BitSupported, IncompleteData };
+const consts = @import("consts.zig");
+const AudioError = consts.AudioError;
 
 pub const Player = struct {
     handle: ?*alsa.snd_pcm_t,

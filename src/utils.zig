@@ -6,6 +6,13 @@ pub fn print(writer: *std.Io.Writer, comptime fmt: []const u8, args: anytype) st
     try writer.flush();
 }
 
+test "print" {
+    const io = std.testing.io;
+    var buffer: [1024 * 20]u8 = undefined;
+    var file_writer = std.Io.File.Writer.init(.stdout(), io, &buffer); 
+    try print(&file_writer.interface, "hello\n" , .{});
+}
+
 
 
 pub fn map_name_to_code(name: []const u8) ?u16 {
@@ -45,4 +52,44 @@ pub fn map_name_to_code(name: []const u8) ?u16 {
         .{ "Slash", 53 },          .{ "Space", 57 },          .{ "Tab", 15 },
     });
     return Map.get(name);
+}
+
+test "map_name_to_code" {
+    const result = map_name_to_code("Space");
+    try std.testing.expect(result == 57);
+}
+
+const Extended_Path = struct {
+    path: []u8,
+    gpa: std.mem.Allocator,
+
+    pub fn init(gpa: std.mem.Allocator, env_map: std.process.Environ.Map, path: []const u8) !Extended_Path {
+        var resulted_path: []u8 = undefined;
+        if(std.mem.startsWith(u8, path, "~")) {
+            const home = env_map.get("HOME");
+            if(home) |h| {
+                resulted_path = try std.fmt.allocPrint(gpa, "{s}/{s}", .{h, path[2..]});
+            } else return error.No_Home;
+        } else {
+            resulted_path = try gpa.dupe(u8, path);
+        }
+        return Extended_Path{
+            .path = resulted_path,
+            .gpa = gpa
+        };
+    }
+
+    pub fn deinit(self: Extended_Path) void {
+        self.gpa.free(self.path);
+    }
+};
+
+
+test "get_extended_path" {
+    const gpa = std.testing.allocator;
+    var env_map = try std.testing.environ.createMap(gpa);
+    defer env_map.deinit();
+    const extended_path = try Extended_Path.init(gpa, env_map, "~/.config/meowkey/config.json"); 
+    defer extended_path.deinit();
+    std.debug.print("path: {s}\n", .{ extended_path.path });
 }

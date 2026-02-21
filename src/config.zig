@@ -14,33 +14,46 @@ pub const KeyEntry = extern struct {
 pub const Config = struct {
     entries: []const KeyEntry,
     file_contents: []const u8,
+    gpa: std.mem.Allocator,
 
-    pub fn load(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !Config {
-        const contents = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, std.Io.Limit.unlimited);
+    pub fn load(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, path: []const u8) !Config {
+        const extended_path = try utils.Extended_Path.init(gpa, env_map, path);
+        defer extended_path.deinit();
+        const contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
         errdefer gpa.free(contents);
 
         const entries = std.mem.bytesAsSlice(KeyEntry, @as([]align(@alignOf(KeyEntry)) u8, @alignCast(contents)));
-        return .{ .entries = entries, .file_contents = contents };
+        return .{ .entries = entries, .file_contents = contents, .gpa = gpa };
     }
-    pub fn deinit(self: *Config, gpa: std.mem.Allocator) void {
-        gpa.free(self.file_contents);
+
+    pub fn deinit(self: Config) void {
+        self.gpa.free(self.file_contents);
     }
-    pub fn get_entry(self: *Config, code: u16) ?KeyEntry {
+
+    pub fn get_entry(self:Config, code: u16) ?KeyEntry {
         for (self.entries) |ent| {
             if (ent.code == code) return ent;
         }
         return null;
     }
 
-    fn pack(gpa: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
-        const file_content = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, std.Io.Limit.unlimited);
+    fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct { config_path: []const u8, bin_path: []const u8 }) !void {
+        const config_extended_path = try utils.Extended_Path.init(gpa, env_map, paths.config_path);
+        defer config_extended_path.deinit();
+
+        const file_content = std.Io.Dir.cwd().readFileAlloc(io, config_extended_path.path, gpa, std.Io.Limit.unlimited) catch |err| {
+            std.log.err("invalid config file at: {s}\n", .{config_extended_path.path});
+            return err;
+        };
         defer gpa.free(file_content);
+
         const parsed = try std.json.parseFromSlice(std.json.Value, gpa, file_content, .{});
         defer parsed.deinit();
+
         const definitions = parsed.value.object.get("definitions") orelse return error.MissingDefinitions;
+
         var entries = std.ArrayList(KeyEntry).empty;
         defer entries.deinit(gpa);
-
         var it = definitions.object.iterator();
         while (it.next()) |entry| {
             const name = entry.key_ptr.*;
@@ -59,15 +72,54 @@ pub const Config = struct {
                 .end = @intFromFloat(end_ms * 44.1)
             });
         }
-        const out_file = try std.Io.Dir.cwd().createFile(io, "assets/config.bin", .{});
+
+        const bin_extended_path = try utils.Extended_Path.init(gpa, env_map, paths.bin_path);
+        defer bin_extended_path.deinit();
+
+        if(std.fs.path.dirname(bin_extended_path.path)) |path| {
+            try std.Io.Dir.cwd().createDirPath(io, path);
+        }
+
+        const out_file = try std.Io.Dir.cwd().createFile(io, bin_extended_path.path, .{});
         defer out_file.close(io);
 
         const bytes = std.mem.sliceAsBytes(entries.items);
         try out_file.writeStreamingAll(io, bytes);
 
-        std.debug.print("Successfully mapped {} keys and wrote to assets/config.bin!\n", .{entries.items.len});
+        std.debug.print("Successfully mapped {} keys and wrote to {s}!\n", .{entries.items.len, paths.bin_path});
     }
 };
+
+test "Config.pack" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    defer env_map.deinit();
+    try Config.pack(gpa, io, env_map, .{ .config_path = consts.CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+}
+
+test "Config.load" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    env_map.deinit();
+    const config = try Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
+    defer config.deinit();
+    for(config.entries) |item| {
+        std.debug.print("{}\n", .{item});
+    }
+}
+
+test "Config.get_entry" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    env_map.deinit();
+    const config = try Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
+    defer config.deinit();
+    const entry = config.get_entry(57);
+    if(entry) |ent| std.debug.print("entry: {}", .{ent});
+}
 
 pub const WavData = struct {
     data: []i16,

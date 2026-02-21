@@ -59,7 +59,7 @@ test "map_name_to_code" {
     try std.testing.expect(result == 57);
 }
 
-const Extended_Path = struct {
+pub const Extended_Path = struct {
     path: []u8,
     gpa: std.mem.Allocator,
 

@@ -124,9 +124,13 @@ test "Config.get_entry" {
 pub const WavData = struct {
     data: []i16,
     file_contents: []u8,
+    gpa: std.mem.Allocator,
 
-    pub fn load_wav(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !WavData {
-        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, std.Io.Limit.unlimited);
+    pub fn load_wav(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, path: []const u8) !WavData {
+        const extended_path = try utils.Extended_Path.init(gpa, env_map, path);
+        defer extended_path.deinit();
+
+        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
         errdefer gpa.free(file_contents);
 
         if (file_contents.len < 12) return AudioError.InvalidHeader;
@@ -167,10 +171,25 @@ pub const WavData = struct {
         return .{
             .data = samples,
             .file_contents = file_contents,
+            .gpa = gpa
         };
     }
 
-    pub fn free(self: *WavData, gpa: std.mem.Allocator) void {
-        gpa.free(self.file_contents);
+    pub fn free(self: *const WavData) void {
+        self.gpa.free(self.file_contents);
     }
 };
+
+test "WavData" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    defer env_map.deinit();
+
+    const wav = try WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH);
+    defer wav.free();
+
+    for(wav.data) |da| {
+        std.debug.print("data: {}\n", .{da});
+    }
+}

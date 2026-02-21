@@ -50,21 +50,32 @@ pub const Config = struct {
         const parsed = try std.json.parseFromSlice(std.json.Value, gpa, file_content, .{});
         defer parsed.deinit();
 
-        const definitions = parsed.value.object.get("definitions") orelse return error.MissingDefinitions;
+        const defines = parsed.value.object.get("defines") orelse return error.MissingDefines;
 
         var entries = std.ArrayList(KeyEntry).empty;
         defer entries.deinit(gpa);
-        var it = definitions.object.iterator();
+        var it = defines.object.iterator();
         while (it.next()) |entry| {
             const name = entry.key_ptr.*;
             const code = utils.map_name_to_code(name) orelse {
                 std.debug.print("Skipping unknown key: {s}\n", .{name});
                 continue;
             };
-            const timing = entry.value_ptr.object.get("timing") orelse continue;
-            const press_pair = timing.array.items[0].array;
-            const start_ms = press_pair.items[0].float;
-            const end_ms = press_pair.items[1].float;
+            
+            const timing_array = entry.value_ptr.array;
+            if (timing_array.items.len != 2) continue;
+            
+            // Handle both integer and float values in the JSON array
+            const start_ms = switch (timing_array.items[0]) {
+                .integer => |i| @as(f64, @floatFromInt(i)),
+                .float => |f| f,
+                else => continue,
+            };
+            const end_ms = switch (timing_array.items[1]) {
+                .integer => |i| @as(f64, @floatFromInt(i)),
+                .float => |f| f,
+                else => continue,
+            };
 
             try entries.append(gpa, .{
                 .code = code,

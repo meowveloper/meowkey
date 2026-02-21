@@ -3,7 +3,7 @@ const consts = @import("consts.zig");
 const AudioError = consts.AudioError;
 const utils = @import("utils.zig");
 
-pub const KeyEntry = extern struct {
+const KeyEntry = extern struct {
     code: u16,
     padding: [2]u8 = .{ 0, 0 },
     start: u32,
@@ -26,7 +26,7 @@ pub const Config = struct {
         return .{ .entries = entries, .file_contents = contents, .gpa = gpa };
     }
 
-    pub fn deinit(self: Config) void {
+    pub fn deinit(self: *const Config) void {
         self.gpa.free(self.file_contents);
     }
 
@@ -37,7 +37,7 @@ pub const Config = struct {
         return null;
     }
 
-    fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct { config_path: []const u8, bin_path: []const u8 }) !void {
+    pub fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct { config_path: []const u8, bin_path: []const u8 }) !void {
         const config_extended_path = try utils.Extended_Path.init(gpa, env_map, paths.config_path);
         defer config_extended_path.deinit();
 

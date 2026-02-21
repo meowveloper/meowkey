@@ -79,7 +79,7 @@ pub const Extended_Path = struct {
         };
     }
 
-    pub fn deinit(self: Extended_Path) void {
+    pub fn deinit(self: *const Extended_Path) void {
         self.gpa.free(self.path);
     }
 };

@@ -36,7 +36,6 @@
             buildInputs = [
                 pkgs.alsa-lib
             ];
-            hardeningDisable = [ "fortify" ];
             dontConfigure = true;
             buildPhase = ''
                 export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache

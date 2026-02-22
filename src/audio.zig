@@ -1,5 +1,6 @@
 const std = @import("std");
 const alsa = @cImport({
+    @cDefine("_FORTIFY_SOURCE", "0");
     @cInclude("alsa/asoundlib.h");
 });
 const consts = @import("consts.zig");

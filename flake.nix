@@ -32,6 +32,7 @@
             nativeBuildInputs = [
                 zig
                 pkgs.pkg-config
+                pkgs.autoPatchelfHook
             ];
             buildInputs = [
                 pkgs.alsa-lib

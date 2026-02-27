@@ -40,3 +40,25 @@ jobs:
         with:
           name: meowkey-${{ matrix.system }}
           path: dist/meowkey-${{ matrix.system }}
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a release
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true # Puts all downloaded files into the same directory
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: artifacts/meowkey-*
+          draft: false
+          prerelease: false

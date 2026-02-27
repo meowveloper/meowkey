@@ -2,8 +2,8 @@ name: Build Releases
 
 on:
   push:
-    tags:
-      - 'v*.*.*' # Trigger on version tags like v1.0.0
+    branches:
+      - 'v*.*.*'
   workflow_dispatch: # Allow running manually for testing
 
 jobs:

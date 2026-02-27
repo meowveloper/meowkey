@@ -1,0 +1,42 @@
+name: Build Releases
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
+  workflow_dispatch: # Allow running manually for testing
+
+jobs:
+  build:
+    name: Build for ${{ matrix.system }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest       # Standard x86_64 runner
+            system: x86_64-linux
+          - os: ubuntu-24.04-arm    # Standard ARM64 runner
+            system: aarch64-linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build with Nix
+        run: nix build .#default
+
+      - name: Prepare binary for upload
+        run: |
+          mkdir -p dist
+          cp result/bin/meowkey dist/meowkey-${{ matrix.system }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meowkey-${{ matrix.system }}
+          path: dist/meowkey-${{ matrix.system }}

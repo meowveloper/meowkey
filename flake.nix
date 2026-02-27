@@ -5,47 +5,55 @@
     };
 
     outputs = { self, nixpkgs, zig-overlay }: let
-            system = "x86_64-linux"; 
+        systems = [ "x86_64-linux" "aarch64-linux" ];
+        forEachSystem = nixpkgs.lib.genAttrs systems;
+    in {
+        devShells = forEachSystem (system: let
             pkgs = nixpkgs.legacyPackages.${system};
             zig = zig-overlay.packages.${system}.master;
-    in {
-        devShells.${system}.default = pkgs.mkShell {
-            nativeBuildInputs = [
-                zig
-                pkgs.zls
-                pkgs.pkg-config
-                pkgs.ffmpeg
-            ];
+        in {
+            default = pkgs.mkShell {
+                nativeBuildInputs = [
+                    zig
+                    pkgs.zls
+                    pkgs.pkg-config
+                    pkgs.ffmpeg
+                ];
 
-            buildInputs = [
-                pkgs.alsa-lib
-            ];
+                buildInputs = [
+                    pkgs.alsa-lib
+                ];
 
-            shellHook = ''
-                echo "Welcome to meowkey Dev Shell!"
-            '';
-        };
+                shellHook = ''
+                    echo "Welcome to meowkey Dev Shell!"
+                '';
+            };
+        });
 
-        packages.${system}.default = pkgs.stdenv.mkDerivation {
-            name = "meowkey";
-            src = ./.; 
-            nativeBuildInputs = [
-                zig
-                pkgs.pkg-config
-                pkgs.autoPatchelfHook
-            ];
-            buildInputs = [
-                pkgs.alsa-lib
-            ];
-            dontConfigure = true;
-            buildPhase = ''
-                export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-                export ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local-cache
-                mkdir -p $ZIG_GLOBAL_CACHE_DIR $ZIG_LOCAL_CACHE_DIR
-                zig build -Doptimize=ReleaseSafe --prefix $out --global-cache-dir $ZIG_GLOBAL_CACHE_DIR
-            '';
-            dontInstall = true;
-        };
-
+        packages = forEachSystem (system: let
+            pkgs = nixpkgs.legacyPackages.${system};
+            zig = zig-overlay.packages.${system}.master;
+        in {
+            default = pkgs.stdenv.mkDerivation {
+                name = "meowkey";
+                src = ./.; 
+                nativeBuildInputs = [
+                    zig
+                    pkgs.pkg-config
+                    pkgs.autoPatchelfHook
+                ];
+                buildInputs = [
+                    pkgs.alsa-lib
+                ];
+                dontConfigure = true;
+                buildPhase = ''
+                    export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+                    export ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local-cache
+                    mkdir -p $ZIG_GLOBAL_CACHE_DIR $ZIG_LOCAL_CACHE_DIR
+                    zig build -Doptimize=ReleaseSafe --prefix $out --global-cache-dir $ZIG_GLOBAL_CACHE_DIR
+                '';
+                dontInstall = true;
+            };
+        });
     };
 }

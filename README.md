@@ -7,7 +7,7 @@ Built with **Zig**, it interacts directly with the Linux Input Subsystem (`/dev/
 ## Features
 -   **Zero Latency:** Direct ALSA integration ensures instant audio feedback.
 -   **Global Capture:** Works system-wide, even in terminals or fullscreen games.
--   **Lightweight:** Written in Zig for high efficiency and low memory footprint.
+-   **Lightweight:** Written in Zig for high efficiency and low memory footprint **(below 30MB while typing)**.
 -   **No Root Required:** Runs with user permissions (if part of the `input` group).
 -   **Embedded Sounds:** Works out of the box with an embedded CherryMX Red PBT sound pack—no configuration required.
 -   **Customizable:** Support for custom `.wav` sound packs and independent volume control.

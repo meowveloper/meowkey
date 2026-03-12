@@ -64,10 +64,10 @@ pub const Config = struct {
                 std.debug.print("Skipping unknown key: {s}\n", .{name});
                 continue;
             };
-            
+        
             const timing_array = entry.value_ptr.array;
             if (timing_array.items.len != 2) continue;
-            
+        
             // Handle both integer and float values in the JSON array
             const start_ms = switch (timing_array.items[0]) {
                 .integer => |i| @as(f64, @floatFromInt(i)),
@@ -137,7 +137,6 @@ test "Config.get_entry" {
 
 pub const WavData = struct {
     data: []i16,
-    file_contents: []u8,
     gpa: std.mem.Allocator,
 
     pub fn load_wav(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, path: []const u8) !WavData {
@@ -146,17 +145,40 @@ pub const WavData = struct {
 
         const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
         errdefer gpa.free(file_contents);
+        defer gpa.free(file_contents);
 
         if (file_contents.len < 12) return AudioError.InvalidHeader;
 
         if (!std.mem.eql(u8, file_contents[0..4], "RIFF")) return AudioError.NotARiffFile;
         if (!std.mem.eql(u8, file_contents[8..12], "WAVE")) return AudioError.NotAWaveFile;
 
+        const mutable_samples = parse_wav(gpa, file_contents) catch |err| { return err; };
+
+        return .{
+            .data = mutable_samples,
+            .gpa = gpa
+        };
+    }
+
+    pub fn free(self: *const WavData) void {
+        self.gpa.free(self.data);
+    }
+
+
+    pub fn apply_volume(self: *const WavData, volume_multiplier: f32) void {
+        for (self.data) |*sample| {
+            const float_sample = @as(f32, @floatFromInt(sample.*));
+            const scaled_sample = float_sample * volume_multiplier;
+            const clamped_sample = std.math.clamp(scaled_sample, -32768.0, 32767.0);
+            sample.* = @as(i16, @intFromFloat(clamped_sample));
+        }
+    }
+
+    fn parse_wav(gpa: std.mem.Allocator, file_contents: []u8) ![]i16 {
         var offset: usize = 12;
         var fmt_found = false;
         var data_found = false;
         var samples: []i16 = &[_]i16{};
-
         while (offset + 8 <= file_contents.len) {
             const chunk_id = file_contents[offset .. offset + 4];
             const chunk_size = std.mem.readInt(u32, file_contents[offset + 4 ..][0..4], .little);
@@ -179,28 +201,9 @@ pub const WavData = struct {
             offset += chunk_size;
             if (offset % 2 != 0) offset += 1;
         }
-
         if (!fmt_found or !data_found) return AudioError.IncompleteData;
-
-        return .{
-            .data = samples,
-            .file_contents = file_contents,
-            .gpa = gpa
-        };
-    }
-
-    pub fn free(self: *const WavData) void {
-        self.gpa.free(self.file_contents);
-    }
-
-
-    pub fn apply_volume(self: *const WavData, volume_multiplier: f32) void {
-        for (self.data) |*sample| {
-            const float_sample = @as(f32, @floatFromInt(sample.*));
-            const scaled_sample = float_sample * volume_multiplier;
-            const clamped_sample = std.math.clamp(scaled_sample, -32768.0, 32767.0);
-            sample.* = @as(i16, @intFromFloat(clamped_sample));
-        }
+        const mutable_samples = try gpa.dupe(i16, samples);
+        return mutable_samples;
     }
 };
 

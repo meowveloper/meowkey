@@ -50,19 +50,12 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, args: Cmd_Arg
         paths.deinit(gpa);
     }
 
-    try config_t.Config.pack_embedded(gpa, io, env_map, .{
-        .bin_path = consts.CONFIG_BIN_PATH,
-        .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH
-    });
-
-    const config = try config_t.Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
+    const config = try config_t.Config.load_embedded(gpa, io, env_map, .{ .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
     defer config.deinit();
 
-    const wav = try config_t.WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH);
+    const wav = try config_t.WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH, args.volume);
     defer wav.free();
 
-    // apply volume
-    wav.apply_volume(args.volume);
 
     for (paths.items) |path| {
         const t = try std.Thread.spawn(.{}, read_thread, .{ path, &config, &wav });

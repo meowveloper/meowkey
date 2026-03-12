@@ -3,6 +3,12 @@ const consts = @import("consts.zig");
 const AudioError = consts.AudioError;
 const utils = @import("utils.zig");
 
+const Environ_Map = std.process.Environ.Map;
+const Io = std.Io;
+const Gpa = std.mem.Allocator;
+const Config_Paths = struct {config_path: []const u8, bin_path: []const u8};
+const Config_Paths_Comptime = struct{comptime embed_path:[]const u8 = consts.EMBEDDED_CONFIG_FILE_PATH, bin_path: []const u8};
+
 const KeyEntry = extern struct {
     code: u16,
     padding: [2]u8 = .{ 0, 0 },
@@ -16,7 +22,16 @@ pub const Config = struct {
     file_contents: []const u8,
     gpa: std.mem.Allocator,
 
-    pub fn load(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, path: []const u8) !Config {
+    pub fn load_file(gpa: Gpa, io: Io, env_map: Environ_Map, paths: Config_Paths) !Config {
+        try pack_config(gpa, io, env_map, paths); 
+        return try load(gpa, io, env_map, paths.bin_path);
+    }
+    pub fn load_embedded(gpa: Gpa, io: Io, env_map: Environ_Map, paths: Config_Paths_Comptime) !Config {
+        try pack_embedded(gpa, io, env_map, paths);
+        return try load(gpa, io, env_map, paths.bin_path);
+    }
+
+    fn load(gpa: Gpa, io: Io, env_map: Environ_Map, path: []const u8) !Config {
         const extended_path = try utils.Extended_Path.init(gpa, env_map, path);
         defer extended_path.deinit();
         const contents = std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited) catch |err| {
@@ -33,23 +48,20 @@ pub const Config = struct {
         self.gpa.free(self.file_contents);
     }
 
-    pub fn get_entry(self:Config, code: u16) ?KeyEntry {
+    pub fn get_entry(self: Config, code: u16) ?KeyEntry {
         for (self.entries) |ent| {
             if (ent.code == code) return ent;
         }
         return null;
     }
-    pub fn pack_config(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct {config_path: []const u8, bin_path: []const u8}) !void {
+    pub fn pack_config(gpa: Gpa, io: Io, env_map: Environ_Map, paths: Config_Paths) !void {
         const extended_path = try utils.Extended_Path.init(gpa, env_map, paths.config_path);
         defer extended_path.deinit();
         const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
         defer gpa.free(file_contents);
         try pack(gpa, io, env_map, file_contents, paths.bin_path);
     }
-    pub fn pack_embedded(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct {
-        comptime embed_path:[]const u8 = consts.EMBEDDED_CONFIG_FILE_PATH,
-        bin_path: []const u8
-    }) !void {
+    pub fn pack_embedded(gpa: Gpa, io: Io, env_map: Environ_Map, paths: Config_Paths_Comptime) !void {
         const file_contents = @embedFile(paths.embed_path);
         try pack(gpa, io, env_map, file_contents, paths.bin_path);
     }
@@ -126,12 +138,23 @@ test "Config.pack_embedded" {
 }
 
 
-test "Config.load" {
+test "Config.load_file" {
     const gpa = std.testing.allocator;
     const io = std.testing.io;
     var env_map = try std.testing.environ.createMap(gpa);
     defer env_map.deinit();
-    const config = try Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
+    const config = try Config.load_file(gpa, io, env_map, .{ .config_path = consts.CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+    defer config.deinit();
+    for(config.entries) |item| {
+        std.debug.print("{}\n", .{item});
+    }
+}
+test "Config.load_embedded" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    defer env_map.deinit();
+    const config = try Config.load_embedded(gpa, io, env_map, .{ .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
     defer config.deinit();
     for(config.entries) |item| {
         std.debug.print("{}\n", .{item});
@@ -153,7 +176,7 @@ pub const WavData = struct {
     data: []i16,
     gpa: std.mem.Allocator,
 
-    pub fn load_wav(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, path: []const u8) !WavData {
+    pub fn load_wav(gpa: Gpa, io: Io, env_map: Environ_Map, path: []const u8, volume_multiplier: f32) !WavData {
         const extended_path = try utils.Extended_Path.init(gpa, env_map, path);
         defer extended_path.deinit();
 
@@ -168,19 +191,23 @@ pub const WavData = struct {
 
         const mutable_samples = try parse_wav(gpa, file_contents);
 
-        return .{
+        const wav_data: WavData = .{
             .data = mutable_samples,
             .gpa = gpa
         };
+        wav_data.apply_volume(volume_multiplier);
+        return wav_data;
     }
 
-    pub fn load_embedded(gpa: std.mem.Allocator, comptime path: []const u8) !WavData {
+    pub fn load_embedded(gpa: Gpa, comptime path: []const u8, volume_multiplier: f32) !WavData {
         const file_contents = @embedFile(path);
         const mutable_samples = try parse_wav(gpa, file_contents);
-        return .{
+        const wav_data: WavData = .{
             .data = mutable_samples,
             .gpa = gpa
         };
+        wav_data.apply_volume(volume_multiplier);
+        return wav_data;
     }
 
     pub fn free(self: *const WavData) void {
@@ -188,7 +215,7 @@ pub const WavData = struct {
     }
 
 
-    pub fn apply_volume(self: *const WavData, volume_multiplier: f32) void {
+    fn apply_volume(self: *const WavData, volume_multiplier: f32) void {
         for (self.data) |*sample| {
             const float_sample = @as(f32, @floatFromInt(sample.*));
             const scaled_sample = float_sample * volume_multiplier;
@@ -197,7 +224,7 @@ pub const WavData = struct {
         }
     }
 
-    fn parse_wav(gpa: std.mem.Allocator, file_contents: []const u8) ![]i16 {
+    fn parse_wav(gpa: Gpa, file_contents: []const u8) ![]i16 {
         var offset: usize = 12;
         var fmt_found = false;
         var data_found = false;
@@ -225,7 +252,7 @@ pub const WavData = struct {
             if (offset % 2 != 0) offset += 1;
         }
         if (!fmt_found or !data_found) return AudioError.IncompleteData;
-        
+
         const samples_count = data_size / 2;
         const mutable_samples = try gpa.alloc(i16, samples_count);
         @memcpy(std.mem.sliceAsBytes(mutable_samples), file_contents[data_offset .. data_offset + data_size]);
@@ -239,10 +266,9 @@ test "WavData" {
     var env_map = try std.testing.environ.createMap(gpa);
     defer env_map.deinit();
 
-    const wav = try WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH);
+    const wav = try WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH, 2.0);
     defer wav.free();
 
-    wav.apply_volume(2.0);
 
     for(wav.data) |da| {
         std.debug.print("data: {}\n", .{da});
@@ -251,9 +277,8 @@ test "WavData" {
 
 test "WavData.load_embedded" {
     const gpa = std.testing.allocator;
-    const wav = try WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH);
+    const wav = try WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH, 2.0);
     defer wav.free();
-    wav.apply_volume(2.0);
 
     for(wav.data) |da| {
         std.debug.print("data: {}\n", .{da});

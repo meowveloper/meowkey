@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    exe.root_module.linkSystemLibrary("alsa", .{ .use_pkg_config = .yes, .preferred_link_mode = .static });
+    exe.root_module.linkSystemLibrary("asound", .{.use_pkg_config = .yes});
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");

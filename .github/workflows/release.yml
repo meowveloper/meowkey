@@ -2,7 +2,7 @@ name: Build Releases
 
 on:
   push:
-    branches:
+    tags:
       - 'v*.*.*'
   workflow_dispatch: # Allow running manually for testing
 
@@ -22,18 +22,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v25
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install ALSA development headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
-      - name: Build with Nix
-        run: nix build .#default
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.16.0-dev.2490+fce7878a9
+
+      - name: Build with Zig
+        run: zig build -Doptimize=ReleaseSafe
 
       - name: Prepare binary for upload
         run: |
           mkdir -p dist
-          cp result/bin/meowkey dist/meowkey-${{ matrix.system }}
+          cp zig-out/bin/meowkey dist/meowkey-${{ matrix.system }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

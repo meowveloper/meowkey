@@ -5,6 +5,7 @@ const audio = @import("audio.zig");
 const config_t = @import("config.zig");
 const consts = @import("consts.zig");
 const Cmd_Args = @import("cmd-args.zig").Cmd_Args;
+const Wav = @import("wav.zig");
 
 const InputEvent = extern struct {
     time: TimeVal,
@@ -31,9 +32,6 @@ pub fn main(init: std.process.Init) !void {
     const stdout_writer = &stdout_file_writer.interface;
 
     const args = try init.minimal.args.toSlice(arena);
-    for (args) |arg| {
-        std.log.info("arg: {s}", .{arg});
-    }
     const cmd_args = Cmd_Args.parse_args(args);
 
     try run(gpa, io, stdout_writer, cmd_args, env_map.*);
@@ -50,11 +48,28 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, args: Cmd_Arg
         paths.deinit(gpa);
     }
 
-    const config = try config_t.Config.load_embedded(gpa, io, env_map, .{ .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+    // init config and wav structs
+    var config: config_t.Config = undefined;
     defer config.deinit();
-
-    const wav = try config_t.WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH, args.volume);
+    var wav: Wav.WavData = undefined;
     defer wav.free();
+
+    // check if config files exists
+    const is_config_json_exist = utils.check_file_existance(gpa, io, env_map, consts.CONFIG_FILE_PATH);
+    const is_config_wav_exist = utils.check_file_existance(gpa, io, env_map, consts.SOUND_FILE_PATH);
+
+
+    // use if exists, if not use embedded
+    if(is_config_json_exist and is_config_wav_exist) {
+        std.log.info("both {s} and {s} are found and will be used instead of embedded assets.\n", .{consts.CONFIG_FILE_PATH, consts.SOUND_FILE_PATH});
+        config = try config_t.Config.load_file(gpa, io, env_map, .{ .config_path = consts.CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+        wav = try Wav.WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH, args.volume);
+    } else {
+        std.log.info("both files {s} and {s} cannot be found. falling back to embedded assets.\n", .{consts.CONFIG_FILE_PATH, consts.SOUND_FILE_PATH});
+        config = try config_t.Config.load_embedded(gpa, io, env_map, .{ .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+        wav = try Wav.WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH, args.volume);
+    }
+
 
 
     for (paths.items) |path| {
@@ -72,7 +87,7 @@ fn play_thread(data: []const i16, device_name: [:0]const u8) void {
     };
 }
 
-fn read_thread(path: []const u8, config: *const config_t.Config, wav: *const config_t.WavData) void {
+fn read_thread(path: []const u8, config: *const config_t.Config, wav: *const Wav.WavData) void {
     const fd = std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY }, 0) catch |err| {
         std.log.err("failed to open device {s}: {}\n", .{path, err});
         return;

@@ -1,7 +1,10 @@
 const std = @import("std");
+const Gpa = std.mem.Allocator;
+const Io = std.Io;
+const Environ_Map = std.process.Environ.Map;
 
 
-pub fn print(writer: *std.Io.Writer, comptime fmt: []const u8, args: anytype) std.Io.Writer.Error!void {
+pub fn print(writer: *Io.Writer, comptime fmt: []const u8, args: anytype) Io.Writer.Error!void {
     try writer.print(fmt, args);
     try writer.flush();
 }
@@ -61,9 +64,9 @@ test "map_name_to_code" {
 
 pub const Extended_Path = struct {
     path: []u8,
-    gpa: std.mem.Allocator,
+    gpa: Gpa,
 
-    pub fn init(gpa: std.mem.Allocator, env_map: std.process.Environ.Map, path: []const u8) !Extended_Path {
+    pub fn init(gpa: Gpa, env_map: Environ_Map, path: []const u8) !Extended_Path {
         var resulted_path: []u8 = undefined;
         if(std.mem.startsWith(u8, path, "~")) {
             const home = env_map.get("HOME");
@@ -92,4 +95,30 @@ test "get_extended_path" {
     const extended_path = try Extended_Path.init(gpa, env_map, "~/.config/meowkey/config.json"); 
     defer extended_path.deinit();
     std.debug.print("path: {s}\n", .{ extended_path.path });
+}
+
+
+pub fn check_file_existance (gpa: Gpa, io: Io, env_map: Environ_Map, path: []const u8) bool {
+    const extended_path = Extended_Path.init(gpa, env_map, path) catch {
+        std.log.err("cannot extend file path '{s}'\n", .{path});
+        return false;
+    };
+    errdefer extended_path.deinit();
+    defer extended_path.deinit();
+    const contents = Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, Io.Limit.unlimited) catch {
+        std.log.err("cannot read file at {s}\n", .{extended_path.path});
+        return false;
+    };
+    defer gpa.free(contents);
+    errdefer gpa.free(contents);
+    return true;
+}
+
+test "check_file_existance" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    defer env_map.deinit();
+    const yes = check_file_existance(gpa, io, env_map, "src/utils.zig");
+    try std.testing.expect(yes);
 }

@@ -57,11 +57,20 @@ jobs:
           path: artifacts
           merge-multiple: true # Puts all downloaded files into the same directory
 
+      - name: Extract Release Notes
+        id: extract_notes
+        run: |
+          # Extract everything under the current version tag up to the next ## header
+          VERSION=${{ github.ref_name }}
+          VERSION=${VERSION#v} # Remove 'v' prefix if present
+          awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > release_notes.txt
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
+          body_path: release_notes.txt
           files: artifacts/meowkey-*
           draft: false
           prerelease: false

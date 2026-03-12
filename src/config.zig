@@ -55,10 +55,10 @@ pub const Config = struct {
                 std.debug.print("Skipping unknown key: {s}\n", .{name});
                 continue;
             };
-        
+
             const timing_array = entry.value_ptr.array;
             if (timing_array.items.len != 2) continue;
-        
+
             // Handle both integer and float values in the JSON array
             const start_ms = switch (timing_array.items[0]) {
                 .integer => |i| @as(f64, @floatFromInt(i)),
@@ -147,8 +147,17 @@ pub const WavData = struct {
         if (!std.mem.eql(u8, file_contents[0..4], "RIFF")) return AudioError.NotARiffFile;
         if (!std.mem.eql(u8, file_contents[8..12], "WAVE")) return AudioError.NotAWaveFile;
 
-        const mutable_samples = parse_wav(gpa, file_contents) catch |err| { return err; };
+        const mutable_samples = try parse_wav(gpa, file_contents);
 
+        return .{
+            .data = mutable_samples,
+            .gpa = gpa
+        };
+    }
+
+    pub fn load_embedded(gpa: std.mem.Allocator, comptime path: []const u8) !WavData {
+        const file_contents = @embedFile(path);
+        const mutable_samples = try parse_wav(gpa, file_contents);
         return .{
             .data = mutable_samples,
             .gpa = gpa
@@ -169,7 +178,7 @@ pub const WavData = struct {
         }
     }
 
-    fn parse_wav(gpa: std.mem.Allocator, file_contents: []u8) ![]i16 {
+    fn parse_wav(gpa: std.mem.Allocator, file_contents: []const u8) ![]i16 {
         var offset: usize = 12;
         var fmt_found = false;
         var data_found = false;
@@ -188,7 +197,7 @@ pub const WavData = struct {
                 fmt_found = true;
             } else if (std.mem.eql(u8, chunk_id, "data")) {
                 const samples_count = chunk_size / 2;
-                const samples_ptr: [*]i16 = @ptrCast(@alignCast(file_contents[offset..].ptr));
+                const samples_ptr: [*]i16 = @ptrCast(@constCast(@alignCast(file_contents[offset..].ptr)));
                 samples = samples_ptr[0..samples_count];
                 data_found = true;
             }
@@ -211,6 +220,17 @@ test "WavData" {
     const wav = try WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH);
     defer wav.free();
 
+    wav.apply_volume(2.0);
+
+    for(wav.data) |da| {
+        std.debug.print("data: {}\n", .{da});
+    }
+}
+
+test "WavData.load_embedded" {
+    const gpa = std.testing.allocator;
+    const wav = try WavData.load_embedded(gpa, "assets/sound.wav");
+    defer wav.free();
     wav.apply_volume(2.0);
 
     for(wav.data) |da| {

@@ -97,3 +97,11 @@ The `config.json` maps key names to audio timestamps (in milliseconds).
 }
 ```
 For a full guide on creating custom sound packs, see [creating_sound_packs.md](./creating_sound_packs.md).
+
+----
+# Future Plans
+- [ ] supporting multiple sound packs without having to change the `~/.config/meokey` folder everytime
+- [ ] hot reload for adding/remove input devices(keyboards)
+- [ ] support for MacOs
+- [ ] support for Windows(not sure)
+- [ ] Frontend GUI for convnience instead of typing command line arguments (not sure)

@@ -40,16 +40,7 @@ pub const Config = struct {
         return null;
     }
 
-    pub fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct { config_path: []const u8, bin_path: []const u8 }) !void {
-        const config_extended_path = try utils.Extended_Path.init(gpa, env_map, paths.config_path);
-        defer config_extended_path.deinit();
-
-        const file_content = std.Io.Dir.cwd().readFileAlloc(io, config_extended_path.path, gpa, std.Io.Limit.unlimited) catch |err| {
-            std.log.err("invalid config file at: {s}\n", .{config_extended_path.path});
-            return err;
-        };
-        defer gpa.free(file_content);
-
+    pub fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, file_content: []u8, bin_path: []const u8 ) !void {
         const parsed = try std.json.parseFromSlice(std.json.Value, gpa, file_content, .{});
         defer parsed.deinit();
 
@@ -87,7 +78,7 @@ pub const Config = struct {
             });
         }
 
-        const bin_extended_path = try utils.Extended_Path.init(gpa, env_map, paths.bin_path);
+        const bin_extended_path = try utils.Extended_Path.init(gpa, env_map, bin_path);
         defer bin_extended_path.deinit();
 
         if(std.fs.path.dirname(bin_extended_path.path)) |path| {
@@ -100,7 +91,7 @@ pub const Config = struct {
         const bytes = std.mem.sliceAsBytes(entries.items);
         try out_file.writeStreamingAll(io, bytes);
 
-        std.debug.print("Successfully mapped {} keys and wrote to {s}!\n", .{entries.items.len, paths.bin_path});
+        std.debug.print("Successfully mapped {} keys and wrote to {s}!\n", .{entries.items.len, bin_path});
     }
 };
 
@@ -109,7 +100,11 @@ test "Config.pack" {
     const io = std.testing.io;
     var env_map = try std.testing.environ.createMap(gpa);
     defer env_map.deinit();
-    try Config.pack(gpa, io, env_map, .{ .config_path = consts.CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+    const extended_path = try utils.Extended_Path.init(gpa, env_map, consts.CONFIG_FILE_PATH);
+    defer extended_path.deinit();
+    const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
+    defer gpa.free(file_contents);
+    try Config.pack(gpa, io, env_map, file_contents, consts.CONFIG_BIN_PATH);
 }
 
 test "Config.load" {

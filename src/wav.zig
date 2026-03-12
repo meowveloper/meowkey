@@ -16,7 +16,6 @@ pub const WavData = struct {
         defer extended_path.deinit();
 
         const file_contents:[]const u8 = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
-        errdefer gpa.free(file_contents);
         defer gpa.free(file_contents);
 
         if (file_contents.len < 12) return AudioError.InvalidHeader;

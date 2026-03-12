@@ -103,14 +103,12 @@ pub fn check_file_existance (gpa: Gpa, io: Io, env_map: Environ_Map, path: []con
         std.log.err("cannot extend file path '{s}'\n", .{path});
         return false;
     };
-    errdefer extended_path.deinit();
     defer extended_path.deinit();
     const contents = Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, Io.Limit.unlimited) catch {
         std.log.err("cannot read file at {s}\n", .{extended_path.path});
         return false;
     };
     defer gpa.free(contents);
-    errdefer gpa.free(contents);
     return true;
 }
 

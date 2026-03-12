@@ -20,6 +20,7 @@ pub const Player = struct {
             return AudioError.OpenFailed;
         }
 
+        errdefer _ = alsa.snd_pcm_close(handle);
         try setup_params(handle, 44100);
         return Player{ .handle = handle };
     }

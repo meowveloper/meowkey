@@ -36,7 +36,9 @@ pub fn detect_keyboard (gpa: std.mem.Allocator, io: std.Io, file: std.Io.File) !
             const ev_bits = std.fmt.parseInt(u64, ev_hex_str, 16) catch 0;
             if((ev_bits & 0x100000) != 0) {
                 if(current_event_id) |event_id| {
-                    try paths.append(gpa, try std.fmt.allocPrint(gpa, "/dev/input/{s}", .{event_id}));
+                    const dev_path = try std.fmt.allocPrint(gpa, "/dev/input/{s}", .{event_id});
+                    errdefer gpa.free(dev_path);
+                    try paths.append(gpa, dev_path);
                 }
             }
         }

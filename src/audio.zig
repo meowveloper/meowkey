@@ -20,6 +20,7 @@ pub const Player = struct {
             return AudioError.OpenFailed;
         }
 
+        errdefer _ = alsa.snd_pcm_close(handle);
         try setup_params(handle, 44100);
         return Player{ .handle = handle };
     }
@@ -70,4 +71,27 @@ pub const Player = struct {
         }
     }
 };
+
+// run witn `zig test src/audio.zig -lc -lasound`
+test "Player init, play, and deinit" {
+    // Attempt to initialize the player with the "default" ALSA device.
+    // In environments without a sound card (like some CI runners), this may fail.
+    // We catch `OpenFailed` gracefully so the test suite doesn't fail unnecessarily.
+    var player = Player.init("default") catch |err| {
+        if (err == AudioError.OpenFailed) {
+            std.debug.print("Skipping audio test: 'default' device could not be opened.\n", .{});
+            return;
+        }
+        return err;
+    };
+    defer player.deinit();
+
+    // Generate ~0.1 seconds of silence (44100 samples/sec / 10 = 4410 samples)
+    const silence = try std.testing.allocator.alloc(i16, 4410);
+    defer std.testing.allocator.free(silence);
+    @memset(silence, 0);
+
+    // Ensure play does not crash
+    try player.play(silence);
+}
 

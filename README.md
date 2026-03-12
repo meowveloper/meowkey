@@ -9,53 +9,82 @@ Built with **Zig**, it interacts directly with the Linux Input Subsystem (`/dev/
 -   **Global Capture:** Works system-wide, even in terminals or fullscreen games.
 -   **Lightweight:** Written in Zig for high efficiency and low memory footprint.
 -   **No Root Required:** Runs with user permissions (if part of the `input` group).
+-   **Embedded Sounds:** Works out of the box with an embedded CherryMX Red PBT sound pack—no configuration required.
+-   **Customizable:** Support for custom `.wav` sound packs and independent volume control.
 
 > note that configuration for different sounds is possible, but it doesn't feel right, and I generated the config.json file using AI. The config structure was inspired by the project MechVibes. I will try to find new ways to be able to make sound packs easier.
 
 ## Installation
-### Prerequisites
--   **Linux** (Kernel 5.x+)
--   **ALSA** (libasound2-dev)
--   **Zig** (0.16.0-dev.2490+fce7878a)
 
-### Build from Source
-```bash
-git clone https://github.com/meowveloper/meowkey.git
-cd meowkey
-zig build -Doptimize=ReleaseSafe
-```
+### Download Prebuilt Binaries (Recommended)
+You can download the latest prebuilt binaries for `x86_64` and `aarch64` Linux directly from the [GitHub Releases](https://github.com/meowveloper/meowkey/releases) page.
+
+1.  Download the binary for your architecture.
+2.  Make it executable: `chmod +x meowkey`
+3.  Run it: `./meowkey` or Run seamlessly in the background: `./meowkey & disown`
+
+### System Prerequisites
+-   **Linux** (Kernel 5.x+)
+-   **ALSA** (`libasound2` on Debian/Ubuntu, `alsa-lib` on Arch/Fedora)
 
 ### Post-Installation Setup
-Meowkey needs permission to read input devices. Add your user to the `input` group or run with `sudo`.
+Meowkey needs permission to read input devices. Add your user to the `input` group:
 
 ```bash
 sudo usermod -aG input $USER
 newgrp input 
 ```
 
+---
+
+## Development (Building from Source)
+
+If you wish to contribute or build the latest version yourself, you will need the **Zig** compiler (version: **0.16.0-dev.2490+fce7878a9**).
+
+```bash
+git clone https://github.com/meowveloper/meowkey.git
+cd meowkey
+zig build -Doptimize=ReleaseSafe
+```
+
+---
+
 ## Usage
 
-1.  **Place Sound Pack:**
-    Meowkey looks for configuration files in `~/.config/meowkey/`.
-    
-    Create the directory:
-    ```bash
-    mkdir -p ~/.config/meowkey
-    ```
-    
-    Copy your [assets/config.json](./assets/config.json) and [assets/sound.wav](./assets/sound.wav) into this folder.
-    *(See [creating_sound_packs.md](./creating_sound_packs.md) for details on the format)*
 
-2.  **Run Meowkey:**
-    ```bash
-    ./zig-out/bin/meowkey
-    ```
-    Run seamlessly in the background:
-    ```bash
-    ./zig-out/bin/meowkey & disown
-    ```
+### Basic Usage
+By default, Meowkey comes with an embedded **CherryMX Red (PBT)** sound pack. You can run it immediately without any setup:
 
-## Configuration
+```bash
+./zig-out/bin/meowkey
+```
+
+Run seamlessly in the background:
+```bash
+./zig-out/bin/meowkey & disown
+```
+
+### Volume Control
+You can adjust the playback volume using the `--volume` or `-vl` flag. The default is `1.0`.
+
+```bash
+# Play at half volume
+./zig-out/bin/meowkey --volume=0.5
+
+# Play at 150% volume
+./zig-out/bin/meowkey -vl=1.5
+```
+
+## Custom Sound Packs
+
+Meowkey looks for custom configuration files in `~/.config/meowkey/`. If both files are found, they will override the embedded sound pack.
+    
+Create the directory:
+```bash
+mkdir -p ~/.config/meowkey
+```
+    
+Copy your `config.json` and `sound.wav` into this folder.
 
 The `config.json` maps key names to audio timestamps (in milliseconds).
 

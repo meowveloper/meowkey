@@ -34,23 +34,22 @@
             pkgs = nixpkgs.legacyPackages.${system};
             zig = zig-overlay.packages.${system}.master;
         in {
-            default = pkgs.stdenv.mkDerivation {
+            default = pkgs.pkgsStatic.stdenv.mkDerivation {
                 name = "meowkey";
                 src = ./.; 
                 nativeBuildInputs = [
                     zig
                     pkgs.pkg-config
-                    pkgs.autoPatchelfHook
                 ];
                 buildInputs = [
-                    pkgs.alsa-lib
+                    pkgs.pkgsStatic.alsa-lib
                 ];
                 dontConfigure = true;
                 buildPhase = ''
                     export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
                     export ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local-cache
                     mkdir -p $ZIG_GLOBAL_CACHE_DIR $ZIG_LOCAL_CACHE_DIR
-                    zig build -Doptimize=ReleaseSafe --prefix $out --global-cache-dir $ZIG_GLOBAL_CACHE_DIR
+                    zig build -Doptimize=ReleaseSafe -Dtarget=${system}-musl --prefix $out --global-cache-dir $ZIG_GLOBAL_CACHE_DIR
                 '';
                 dontInstall = true;
             };

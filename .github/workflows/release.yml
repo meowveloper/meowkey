@@ -2,7 +2,7 @@ name: Build Releases
 
 on:
   push:
-    tags:
+    branches:
       - 'v*.*.*'
   workflow_dispatch: # Allow running manually for testing
 

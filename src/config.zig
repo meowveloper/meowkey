@@ -19,7 +19,10 @@ pub const Config = struct {
     pub fn load(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, path: []const u8) !Config {
         const extended_path = try utils.Extended_Path.init(gpa, env_map, path);
         defer extended_path.deinit();
-        const contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
+        const contents = std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited) catch |err| {
+            std.log.err("Error loading config file {}\n", .{err});
+            return err;
+        };
         errdefer gpa.free(contents);
 
         const entries = std.mem.bytesAsSlice(KeyEntry, @as([]align(@alignOf(KeyEntry)) u8, @alignCast(contents)));
@@ -113,7 +116,7 @@ test "Config.load" {
     const gpa = std.testing.allocator;
     const io = std.testing.io;
     var env_map = try std.testing.environ.createMap(gpa);
-    env_map.deinit();
+    defer env_map.deinit();
     const config = try Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
     defer config.deinit();
     for(config.entries) |item| {
@@ -125,7 +128,7 @@ test "Config.get_entry" {
     const gpa = std.testing.allocator;
     const io = std.testing.io;
     var env_map = try std.testing.environ.createMap(gpa);
-    env_map.deinit();
+    defer env_map.deinit();
     const config = try Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
     defer config.deinit();
     const entry = config.get_entry(57);
@@ -189,6 +192,16 @@ pub const WavData = struct {
     pub fn free(self: *const WavData) void {
         self.gpa.free(self.file_contents);
     }
+
+
+    pub fn apply_volume(self: *const WavData, volume_multiplier: f32) void {
+        for (self.data) |*sample| {
+            const float_sample = @as(f32, @floatFromInt(sample.*));
+            const scaled_sample = float_sample * volume_multiplier;
+            const clamped_sample = std.math.clamp(scaled_sample, -32768.0, 32767.0);
+            sample.* = @as(i16, @intFromFloat(clamped_sample));
+        }
+    }
 };
 
 test "WavData" {
@@ -199,6 +212,8 @@ test "WavData" {
 
     const wav = try WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH);
     defer wav.free();
+
+    wav.apply_volume(2.0);
 
     for(wav.data) |da| {
         std.debug.print("data: {}\n", .{da});

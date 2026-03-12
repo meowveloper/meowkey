@@ -2,7 +2,7 @@ name: Build Releases
 
 on:
   push:
-    branches:
+    tags:
       - 'v*.*.*'
   workflow_dispatch: # Allow running manually for testing
 
@@ -28,7 +28,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: 0.16.0-dev.2490+fce7878a9
+          version: master
 
       - name: Build with Zig
         run: zig build -Doptimize=ReleaseSafe

@@ -92,7 +92,7 @@ fn read_thread(path: []const u8, config: *const config_t.Config, wav: *const Wav
         std.log.err("failed to open device {s}: {}\n", .{path, err});
         return;
     };
-    defer std.posix.close(fd);
+    defer _ = std.os.linux.close(fd);
     while (true) {
         var ev: InputEvent = undefined;
         const bytes_read = std.posix.read(fd, std.mem.asBytes(&ev)) catch return;

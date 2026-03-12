@@ -1,8 +1,8 @@
 pub const SOUND_FILE_PATH = "~/.config/meowkey/sound.wav";
 pub const CONFIG_FILE_PATH = "~/.config/meowkey/config.json";
 
-pub const EMBEDDED_CONFIG_FILE_PATH = "assets/config.json";
-pub const EMBEDDED_SOUND_FILE_PATH = "assets/sound.wav";
+pub const EMBEDDED_CONFIG_FILE_PATH = "assets/cherrymx-red-pbt/config.json";
+pub const EMBEDDED_SOUND_FILE_PATH = "assets/cherrymx-red-pbt/sound.wav";
 
 
 pub const CONFIG_BIN_PATH = "~/.cache/meowkey/config.bin";

@@ -4,6 +4,7 @@ const device = @import("device.zig");
 const audio = @import("audio.zig");
 const config_t = @import("config.zig");
 const consts = @import("consts.zig");
+const Cmd_Args = @import("cmd-args.zig").Cmd_Args;
 
 const InputEvent = extern struct {
     time: TimeVal,
@@ -33,11 +34,12 @@ pub fn main(init: std.process.Init) !void {
     for (args) |arg| {
         std.log.info("arg: {s}", .{arg});
     }
+    const cmd_args = Cmd_Args.parse_args(args);
 
-    try run(gpa, io, stdout_writer, env_map.*);
+    try run(gpa, io, stdout_writer, cmd_args, env_map.*);
 }
 
-fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, env_map: std.process.Environ.Map) !void {
+fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, args: Cmd_Args, env_map: std.process.Environ.Map) !void {
     try utils.print(writer, "starting meowkey\n", .{});
     var devices_file = try std.Io.Dir.openFileAbsolute(io, "/proc/bus/input/devices", .{ .mode = .read_only });
     defer devices_file.close(io);
@@ -54,6 +56,9 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, env_map: std.
 
     const wav = try config_t.WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH);
     defer wav.free();
+
+    // apply volume
+    wav.apply_volume(args.volume);
 
     for (paths.items) |path| {
         const t = try std.Thread.spawn(.{}, read_thread, .{ path, &config, &wav });

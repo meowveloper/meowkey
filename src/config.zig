@@ -39,8 +39,22 @@ pub const Config = struct {
         }
         return null;
     }
+    pub fn pack_config(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct {config_path: []const u8, bin_path: []const u8}) !void {
+        const extended_path = try utils.Extended_Path.init(gpa, env_map, paths.config_path);
+        defer extended_path.deinit();
+        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
+        defer gpa.free(file_contents);
+        try pack(gpa, io, env_map, file_contents, paths.bin_path);
+    }
+    pub fn pack_embedded(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, paths: struct {
+        comptime embed_path:[]const u8 = consts.EMBEDDED_CONFIG_FILE_PATH,
+        bin_path: []const u8
+    }) !void {
+        const file_contents = @embedFile(paths.embed_path);
+        try pack(gpa, io, env_map, file_contents, paths.bin_path);
+    }
 
-    pub fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, file_content: []u8, bin_path: []const u8 ) !void {
+   fn pack(gpa: std.mem.Allocator, io: std.Io, env_map: std.process.Environ.Map, file_content: []const u8, bin_path: []const u8 ) !void {
         const parsed = try std.json.parseFromSlice(std.json.Value, gpa, file_content, .{});
         defer parsed.deinit();
 
@@ -95,17 +109,22 @@ pub const Config = struct {
     }
 };
 
-test "Config.pack" {
+test "Config.pack_config" {
     const gpa = std.testing.allocator;
     const io = std.testing.io;
     var env_map = try std.testing.environ.createMap(gpa);
     defer env_map.deinit();
-    const extended_path = try utils.Extended_Path.init(gpa, env_map, consts.CONFIG_FILE_PATH);
-    defer extended_path.deinit();
-    const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
-    defer gpa.free(file_contents);
-    try Config.pack(gpa, io, env_map, file_contents, consts.CONFIG_BIN_PATH);
+    try Config.pack_config(gpa, io, env_map, .{ .config_path = consts.CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
 }
+
+test "Config.pack_embedded" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var env_map = try std.testing.environ.createMap(gpa);
+    defer env_map.deinit();
+    try Config.pack_embedded(gpa, io, env_map, .{ .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH, .bin_path = consts.CONFIG_BIN_PATH });
+}
+
 
 test "Config.load" {
     const gpa = std.testing.allocator;
@@ -138,7 +157,7 @@ pub const WavData = struct {
         const extended_path = try utils.Extended_Path.init(gpa, env_map, path);
         defer extended_path.deinit();
 
-        const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
+        const file_contents:[]const u8 = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
         errdefer gpa.free(file_contents);
         defer gpa.free(file_contents);
 
@@ -182,7 +201,8 @@ pub const WavData = struct {
         var offset: usize = 12;
         var fmt_found = false;
         var data_found = false;
-        var samples: []i16 = &[_]i16{};
+        var data_offset: usize = 0;
+        var data_size: usize = 0;
         while (offset + 8 <= file_contents.len) {
             const chunk_id = file_contents[offset .. offset + 4];
             const chunk_size = std.mem.readInt(u32, file_contents[offset + 4 ..][0..4], .little);
@@ -196,9 +216,8 @@ pub const WavData = struct {
                 if (bits_per_sample != 16) return AudioError.Only16BitSupported;
                 fmt_found = true;
             } else if (std.mem.eql(u8, chunk_id, "data")) {
-                const samples_count = chunk_size / 2;
-                const samples_ptr: [*]i16 = @ptrCast(@constCast(@alignCast(file_contents[offset..].ptr)));
-                samples = samples_ptr[0..samples_count];
+                data_offset = offset;
+                data_size = chunk_size;
                 data_found = true;
             }
 
@@ -206,7 +225,10 @@ pub const WavData = struct {
             if (offset % 2 != 0) offset += 1;
         }
         if (!fmt_found or !data_found) return AudioError.IncompleteData;
-        const mutable_samples = try gpa.dupe(i16, samples);
+        
+        const samples_count = data_size / 2;
+        const mutable_samples = try gpa.alloc(i16, samples_count);
+        @memcpy(std.mem.sliceAsBytes(mutable_samples), file_contents[data_offset .. data_offset + data_size]);
         return mutable_samples;
     }
 };
@@ -229,7 +251,7 @@ test "WavData" {
 
 test "WavData.load_embedded" {
     const gpa = std.testing.allocator;
-    const wav = try WavData.load_embedded(gpa, "assets/sound.wav");
+    const wav = try WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH);
     defer wav.free();
     wav.apply_volume(2.0);
 

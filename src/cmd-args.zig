@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const Cmd_Args = struct {
-    volume: f32 = 30.0,
+    volume: f32 = 1.0,
 
     pub fn parse_args(raw_args: []const [:0]const u8) Cmd_Args {
         var args = Cmd_Args{};

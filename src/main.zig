@@ -50,17 +50,15 @@ fn run(gpa: std.mem.Allocator, io: std.Io, writer: *std.Io.Writer, args: Cmd_Arg
         paths.deinit(gpa);
     }
 
-    // packing
-    const extended_path = try utils.Extended_Path.init(gpa, env_map, consts.CONFIG_FILE_PATH);
-    defer extended_path.deinit();
-    const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, extended_path.path, gpa, std.Io.Limit.unlimited);
-    defer gpa.free(file_contents);
-    try config_t.Config.pack(gpa, io, env_map, file_contents, consts.CONFIG_BIN_PATH);
+    try config_t.Config.pack_embedded(gpa, io, env_map, .{
+        .bin_path = consts.CONFIG_BIN_PATH,
+        .embed_path = consts.EMBEDDED_CONFIG_FILE_PATH
+    });
 
     const config = try config_t.Config.load(gpa, io, env_map, consts.CONFIG_BIN_PATH);
     defer config.deinit();
 
-    const wav = try config_t.WavData.load_wav(gpa, io, env_map, consts.SOUND_FILE_PATH);
+    const wav = try config_t.WavData.load_embedded(gpa, consts.EMBEDDED_SOUND_FILE_PATH);
     defer wav.free();
 
     // apply volume

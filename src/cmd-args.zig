@@ -1,14 +1,14 @@
 const std = @import("std");
 
-const Cmd_Args = struct {
-    volume: ?f32 = null,
+pub const Cmd_Args = struct {
+    volume: f32 = 30.0,
 
     pub fn parse_args(raw_args: []const [:0]const u8) Cmd_Args {
         var args = Cmd_Args{};
         for(raw_args) |arg| {
             if(std.mem.startsWith(u8, arg, "--volume") or std.mem.startsWith(u8, arg, "-vl")) {
                 const vol = parse_vol(arg);
-                args.volume = vol;  
+                if(vol) |v| args.volume = v;
             }
         }
         return args;

@@ -39,7 +39,7 @@ newgrp input
 
 ## Development (Building from Source)
 
-If you wish to contribute or build the latest version yourself, you will need the **Zig** compiler (version: **0.16.0-dev.2490+fce7878a9**).
+If you wish to contribute or build the latest version yourself, you will need the **Zig** compiler (version: **0.16.0-dev.2821+3edaef9e0**).
 
 ```bash
 git clone https://github.com/meowveloper/meowkey.git

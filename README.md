@@ -4,6 +4,13 @@
 
 Built with **Zig**, it interacts directly with the Linux Input Subsystem (`/dev/input`) and ALSA for maximum performance and minimal resource usage.
 
+# Preview
+
+
+https://github.com/user-attachments/assets/d163c566-8a7c-496d-a539-45eefa7714f0
+
+
+
 ## Features
 -   **Zero Latency:** Direct ALSA integration ensures instant audio feedback.
 -   **Global Capture:** Works system-wide, even in terminals or fullscreen games.

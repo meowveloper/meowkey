@@ -2,7 +2,7 @@ name: Build Releases
 
 on:
   push:
-    branches:
+    tags:
       - 'v*.*.*'
   workflow_dispatch: # Allow running manually for testing
 
@@ -48,6 +48,7 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write # Required to create a release
     steps:
@@ -66,7 +67,7 @@ jobs:
           # Extract everything under the current version tag up to the next ## header
           VERSION=${{ github.ref_name }}
           VERSION=${VERSION#v} # Remove 'v' prefix if present
-          awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > release_notes.txt
+          awk -v ver="$VERSION" '$0 ~ "^## \\[" ver "\\]" {flag=1; next} /^## \[/ {flag=0} flag' CHANGELOG.md > release_notes.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

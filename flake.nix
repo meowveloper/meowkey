@@ -10,7 +10,7 @@
     in {
         devShells = forEachSystem (system: let
             pkgs = nixpkgs.legacyPackages.${system};
-            zig = zig-overlay.packages.${system}.master;
+            zig = zig-overlay.packages.${system}."0.16.0";
         in {
             default = pkgs.mkShell {
                 nativeBuildInputs = [
